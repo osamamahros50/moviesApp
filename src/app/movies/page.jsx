@@ -7,14 +7,14 @@ import { useEffect, useMemo, useState } from "react";
 import Pagination from "../components/Pagination";
 import FilterSection from "../components/FilterSection";
 
-// helper function to fetch json data from url
+// fetch helper
 const fetcher = (url) =>
   fetch(url).then((res) => {
     if (!res.ok) throw new Error("Failed to fetch data");
     return res.json();
   });
 
-// fixed year ranges
+// year ranges
 const yearRanges = {
   2025: { gte: "2025-01-01", lte: "2025-12-31" },
   2024: { gte: "2024-01-01", lte: "2024-12-31" },
@@ -36,7 +36,7 @@ export default function MoviesPage() {
     setPage(isNaN(pageParam) || pageParam < 1 ? 1 : pageParam);
   }, [searchParams]);
 
-  // extract filter values from URL
+  // extract filter values
   const genre = searchParams.get("genre") || "all";
   const year = searchParams.get("year") || "all";
   const rating = searchParams.get("rating") || "all";
@@ -46,14 +46,15 @@ export default function MoviesPage() {
 
   const yearRange = yearRanges[year] || {};
 
-  // build base URL for API
+  // build base url
   const baseUrl = query
     ? `https://api.themoviedb.org/3/search/movie?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}&query=${encodeURIComponent(query)}`
-    : `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}&sort_by=popularity.desc&page=${page}`;
+    : `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}&sort_by=${sortBy}&page=${page}`;
 
-  // apply filter params
+  // apply filters
   const apiUrl = new URL(baseUrl);
-  apiUrl.searchParams.set("page", page);
+  apiUrl.searchParams.set("page", page.toString());
+
   if (!query) {
     if (genre !== "all") apiUrl.searchParams.set("with_genres", genre);
     if (language !== "all") apiUrl.searchParams.set("with_original_language", language);
@@ -63,10 +64,8 @@ export default function MoviesPage() {
     if (yearRange.lte) apiUrl.searchParams.set("primary_release_date.lte", yearRange.lte);
   }
 
-  // fetch movies
+  // fetch data
   const { data: moviesData } = useSWR(apiUrl.toString(), fetcher);
-
-  // fetch languages and genres
   const { data: languagesData } = useSWR(
     `https://api.themoviedb.org/3/configuration/languages?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}`,
     fetcher
@@ -76,9 +75,9 @@ export default function MoviesPage() {
     fetcher
   );
 
-  // manually filter search results
-  function filterMovies(movies, { genre, yearRange, rating, language }) {
-    return movies.filter((movie) => {
+  // manual filter for search
+  const filterMovies = (movies, { genre, yearRange, rating, language }) =>
+    movies.filter((movie) => {
       const date = new Date(movie.release_date || "");
       return (
         (genre === "all" || movie.genre_ids.includes(Number(genre))) &&
@@ -88,9 +87,7 @@ export default function MoviesPage() {
         (language === "all" || movie.original_language === language)
       );
     });
-  }
 
-  // useMemo for performance
   const filteredMovies = useMemo(() => {
     if (!moviesData?.results) return [];
     return query
@@ -112,18 +109,10 @@ export default function MoviesPage() {
 
   return (
     <div className="container mx-auto px-4">
-      <FilterSection
-        genres={genres}
-        languages={languages}
-        placeholder="Select movies"
-      />
+      <FilterSection genres={genres} languages={languages} placeholder="Select movies" />
       <MediaDisplay items={filteredMovies} />
       {filteredMovies.length >= 15 && totalPages > 1 && (
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} />
       )}
     </div>
   );
