@@ -1,15 +1,16 @@
-"use client";
+'use client';
 
+import { Suspense, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import MediaDisplay from "./../components/MediaDisplay";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import Pagination from "../components/Pagination";
-import FilterSection from "../components/FilterSection";
 
-// helper function to fetch json data from url
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import FilterSection from "../components/FilterSection";
+import MediaDisplay from "../components/MediaDisplay";
+import Pagination from "../components/Pagination";
+
+// fetch helper
 const fetcher = (url) =>
-  fetch(url).then((res) => {
+  fetch(url).then(res => {
     if (!res.ok) throw new Error("Failed to fetch data");
     return res.json();
   });
@@ -24,19 +25,17 @@ const yearRanges = {
   "1990-1999": { gte: "1990-01-01", lte: "1999-12-31" },
 };
 
-export default function SeriesPage() {
+function TvSeriesContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
 
-  // get current page from URL
   useEffect(() => {
     const pageParam = parseInt(searchParams.get("page") || "1", 10);
     setPage(isNaN(pageParam) || pageParam < 1 ? 1 : pageParam);
   }, [searchParams]);
 
-  // extract filter values from URL
   const genre = searchParams.get("genre") || "all";
   const year = searchParams.get("year") || "all";
   const rating = searchParams.get("rating") || "all";
@@ -46,32 +45,23 @@ export default function SeriesPage() {
 
   const yearRange = yearRanges[year] || {};
 
-  // build base URL for API
   const baseUrl = query
-    ? `https://api.themoviedb.org/3/search/tv?api_key=${
-        process.env.NEXT_PUBLIC_TMDB_API_KEY
-      }&query=${encodeURIComponent(query)}`
-    : `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}&sort_by=popularity.desc&page=${page}`;
+    ? `https://api.themoviedb.org/3/search/tv?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}&query=${encodeURIComponent(query)}`
+    : `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}&sort_by=${sortBy}&page=${page}`;
 
-  // apply filter params
   const apiUrl = new URL(baseUrl);
-  apiUrl.searchParams.set("page", page);
+  apiUrl.searchParams.set("page", page.toString());
+
   if (!query) {
     if (genre !== "all") apiUrl.searchParams.set("with_genres", genre);
-    if (language !== "all")
-      apiUrl.searchParams.set("with_original_language", language);
+    if (language !== "all") apiUrl.searchParams.set("with_original_language", language);
     if (rating !== "all") apiUrl.searchParams.set("vote_average.gte", rating);
     if (sortBy) apiUrl.searchParams.set("sort_by", sortBy);
-    if (yearRange.gte)
-      apiUrl.searchParams.set("first_air_date.gte", yearRange.gte);
-    if (yearRange.lte)
-      apiUrl.searchParams.set("first_air_date.lte", yearRange.lte);
+    if (yearRange.gte) apiUrl.searchParams.set("first_air_date.gte", yearRange.gte);
+    if (yearRange.lte) apiUrl.searchParams.set("first_air_date.lte", yearRange.lte);
   }
 
-  // fetch series
   const { data: seriesData } = useSWR(apiUrl.toString(), fetcher);
-
-  // fetch languages and genres
   const { data: languagesData } = useSWR(
     `https://api.themoviedb.org/3/configuration/languages?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}`,
     fetcher
@@ -81,9 +71,8 @@ export default function SeriesPage() {
     fetcher
   );
 
-  // manually filter search results
-  function filterSeries(series, { genre, yearRange, rating, language }) {
-    return series.filter((show) => {
+  const filterSeries = (series, { genre, yearRange, rating, language }) =>
+    series.filter((show) => {
       const date = new Date(show.first_air_date || "");
       return (
         (genre === "all" || show.genre_ids.includes(Number(genre))) &&
@@ -93,9 +82,7 @@ export default function SeriesPage() {
         (language === "all" || show.original_language === language)
       );
     });
-  }
 
-  // useMemo for performance
   const filteredSeries = useMemo(() => {
     if (!seriesData?.results) return [];
     return query
@@ -113,24 +100,23 @@ export default function SeriesPage() {
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  if (!seriesData || !genresData || !languagesData)
-    return <div>Loading...</div>;
+  if (!seriesData || !genresData || !languagesData) return <div>Loading...</div>;
 
   return (
     <div className="container mx-auto px-4">
-      <FilterSection
-        genres={genres}
-        languages={languages}
-        placeholder="Select Tv Series"
-      />
+      <FilterSection genres={genres} languages={languages} placeholder="Select TV Series" />
       <MediaDisplay items={filteredSeries} />
       {filteredSeries.length >= 15 && totalPages > 1 && (
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-        />
+        <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} />
       )}
     </div>
+  );
+}
+
+export default function SeriesPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-10">Loading TV Series...</div>}>
+      <TvSeriesContent />
+    </Suspense>
   );
 }
